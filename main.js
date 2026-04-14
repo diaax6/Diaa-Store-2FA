@@ -168,7 +168,15 @@ document.addEventListener('DOMContentLoaded', () => {
   initEventListeners();
   renderSavedKeys();
   
-  // Check for secret in URL params
+  // Check for secret in URL path (e.g. /a3fztrscx734b6qy4cuxfjrownt35zly)
+  const pathCode = window.location.pathname.replace(/^\//, '').replace(/\/$/, '');
+  if (pathCode && /^[a-zA-Z0-9]{32}$/i.test(pathCode)) {
+    elements.secretInput.value = pathCode;
+    startGenerator(pathCode);
+    return;
+  }
+  
+  // Fallback: check for secret in URL query params
   const urlParams = new URLSearchParams(window.location.search);
   const secretParam = urlParams.get('secret') || urlParams.get('key');
   if (secretParam) {
