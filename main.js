@@ -169,8 +169,10 @@ document.addEventListener('DOMContentLoaded', () => {
   renderSavedKeys();
   
   // Check for secret in URL path (e.g. /a3fztrscx734b6qy4cuxfjrownt35zly)
-  const pathCode = window.location.pathname.replace(/^\//, '').replace(/\/$/, '');
-  if (pathCode && /^[a-zA-Z0-9]{32}$/i.test(pathCode)) {
+  const rawPathCode = window.location.pathname.replace(/^\//, '').replace(/\/$/, '');
+  // Strip ALL whitespace and non-alphanumeric characters, keep only letters and digits
+  const pathCode = rawPathCode.replace(/[^a-zA-Z0-9]/g, '');
+  if (pathCode && pathCode.length >= 16 && /^[A-Za-z2-7]+=*$/i.test(pathCode.toUpperCase().replace(/[0-9]/g, '')||'A')) {
     elements.secretInput.value = pathCode;
     startGenerator(pathCode);
     return;
@@ -199,7 +201,8 @@ function initEventListeners() {
   
   // Generate button
   elements.generateBtn.addEventListener('click', () => {
-    const secret = elements.secretInput.value.trim();
+    // Strip ALL whitespace and spaces from input
+    const secret = elements.secretInput.value.replace(/\s+/g, '').trim();
     if (!secret) {
       showError(elements.secretError, 'Please enter a secret key');
       elements.secretInput.classList.add('error');
@@ -229,6 +232,8 @@ function initEventListeners() {
     elements.inputSection.style.display = '';
     elements.secretInput.value = '';
     elements.secretInput.focus();
+    // Reset URL back to root
+    window.history.pushState({}, '', '/');
   });
   
   // Copy code button
@@ -250,8 +255,8 @@ function initEventListeners() {
 
 // ---- Generator Logic ----
 async function startGenerator(secret) {
-  // Validate the secret
-  const cleanedSecret = secret.replace(/[\s-]+/g, '').toUpperCase();
+  // Strip ALL whitespace, spaces, dashes — keep only alphanumeric chars
+  const cleanedSecret = secret.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
   
   try {
     const testCode = await generateTOTP(cleanedSecret);
@@ -263,6 +268,12 @@ async function startGenerator(secret) {
   }
   
   currentSecret = cleanedSecret;
+  
+  // Auto-update URL to show the secret key after /
+  const newUrl = '/' + cleanedSecret.toLowerCase();
+  if (window.location.pathname !== newUrl) {
+    window.history.pushState({}, '', newUrl);
+  }
   
   // Switch to code display
   elements.inputSection.style.display = 'none';
