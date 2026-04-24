@@ -169,10 +169,11 @@ document.addEventListener('DOMContentLoaded', () => {
   renderSavedKeys();
   
   // Check for secret in URL path (e.g. /a3fztrscx734b6qy4cuxfjrownt35zly)
-  const rawPathCode = window.location.pathname.replace(/^\//, '').replace(/\/$/, '');
-  // Strip ALL whitespace and non-alphanumeric characters, keep only letters and digits
+  // decodeURIComponent handles %20 (spaces) and other encoded chars
+  const rawPathCode = decodeURIComponent(window.location.pathname).replace(/^\//, '').replace(/\/$/, '');
+  // Strip ALL whitespace, spaces, and non-alphanumeric characters — keep only letters and digits
   const pathCode = rawPathCode.replace(/[^a-zA-Z0-9]/g, '');
-  if (pathCode && pathCode.length >= 16 && /^[A-Za-z2-7]+=*$/i.test(pathCode.toUpperCase().replace(/[0-9]/g, '')||'A')) {
+  if (pathCode && pathCode.length >= 16) {
     elements.secretInput.value = pathCode;
     startGenerator(pathCode);
     return;

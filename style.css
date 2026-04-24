@@ -257,7 +257,7 @@ input, textarea {
    ============================================= */
 .hero {
   position: relative;
-  padding: 140px 32px 40px;
+  padding: 110px 32px 20px;
   text-align: center;
   overflow: hidden;
 }
