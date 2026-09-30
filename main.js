@@ -32,7 +32,7 @@ const translations = {
     diaaDescription: "حلول رقمية ودعم مباشر باهتمام وسرعة.",
     getproDescription: "تجربة احترافية وخدمات رقمية موثوقة.",
     privacyTitle: "خصوصيتك جزء من التصميم",
-    privacyDescription: "لا نخزن مفتاحك، لا نضعه في رابط الصفحة، ولا نرسله إلى أي خادم. أغلق الصفحة فيُحذف من الجلسة.",
+    privacyDescription: "لا نخزن مفتاحك ولا نرسله إلى أي خادم. وإذا فتحته من رابط، نمسحه فورًا من شريط العنوان بعد قراءته.",
     footerBy: "بواسطة Diaa Store × GetPro Store",
     rights: "جميع الحقوق محفوظة.",
     emptyError: "أدخل المفتاح السري أولًا.",
@@ -75,7 +75,7 @@ const translations = {
     diaaDescription: "Digital solutions and fast, attentive support.",
     getproDescription: "A professional experience and reliable digital services.",
     privacyTitle: "Privacy is built in",
-    privacyDescription: "We do not save your secret, put it in the URL, or send it to a server. Close the page and it is gone.",
+    privacyDescription: "We never save your secret or send it to a server. If opened from a link, it is removed from the address bar immediately after reading it.",
     footerBy: "By Diaa Store × GetPro Store",
     rights: "All rights reserved.",
     emptyError: "Enter your secret key first.",
@@ -169,6 +169,24 @@ function normalizeSecret(value) {
   }
 
   return candidate.replace(/[\s-]+/g, "").replace(/=+$/g, "").toUpperCase();
+}
+
+function getSecretFromPath() {
+  const encodedPath = window.location.pathname.replace(/^\/+|\/+$/g, "");
+  if (!encodedPath) return "";
+
+  let pathValue = "";
+  try {
+    pathValue = decodeURIComponent(encodedPath);
+  } catch {
+    window.history.replaceState({}, "", "/");
+    return "";
+  }
+
+  // Remove the sensitive value from the address bar and browser history
+  // immediately after capturing it for this in-memory session.
+  window.history.replaceState({}, "", "/");
+  return pathValue;
 }
 
 function decodeBase32(secret) {
@@ -434,3 +452,8 @@ window.addEventListener("pageshow", (event) => {
 
 elements.currentYear.textContent = String(new Date().getFullYear());
 applyLanguage("ar");
+
+const pathSecret = getSecretFromPath();
+if (pathSecret) {
+  startGenerator(pathSecret);
+}
