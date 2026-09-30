@@ -32,7 +32,7 @@ const translations = {
     diaaDescription: "حلول رقمية ودعم مباشر باهتمام وسرعة.",
     getproDescription: "تجربة احترافية وخدمات رقمية موثوقة.",
     privacyTitle: "خصوصيتك جزء من التصميم",
-    privacyDescription: "لا نخزن مفتاحك ولا نرسله إلى أي خادم. وإذا فتحته من رابط، نمسحه فورًا من شريط العنوان بعد قراءته.",
+    privacyDescription: "تتم عملية التوليد داخل متصفحك ولا نحفظ مفتاحك في قاعدة بيانات. تنبيه: استخدام المفتاح في الرابط قد يجعله ظاهرًا في سجل المتصفح.",
     footerBy: "بواسطة Diaa Store × GetPro Store",
     rights: "جميع الحقوق محفوظة.",
     emptyError: "أدخل المفتاح السري أولًا.",
@@ -75,7 +75,7 @@ const translations = {
     diaaDescription: "Digital solutions and fast, attentive support.",
     getproDescription: "A professional experience and reliable digital services.",
     privacyTitle: "Privacy is built in",
-    privacyDescription: "We never save your secret or send it to a server. If opened from a link, it is removed from the address bar immediately after reading it.",
+    privacyDescription: "Generation happens locally and we do not store your secret in a database. Note: using the secret in the URL may expose it in browser history.",
     footerBy: "By Diaa Store × GetPro Store",
     rights: "All rights reserved.",
     emptyError: "Enter your secret key first.",
@@ -179,13 +179,9 @@ function getSecretFromPath() {
   try {
     pathValue = decodeURIComponent(encodedPath);
   } catch {
-    window.history.replaceState({}, "", "/");
     return "";
   }
 
-  // Remove the sensitive value from the address bar and browser history
-  // immediately after capturing it for this in-memory session.
-  window.history.replaceState({}, "", "/");
   return pathValue;
 }
 
@@ -318,6 +314,12 @@ async function startGenerator(rawSecret) {
   try {
     currentSecret = secret;
     currentCode = await generateTotp(currentSecret);
+    // Keep the normalized secret in the URL for direct-link workflows.
+    // Whitespace and dashes are removed by normalizeSecret before this point.
+    const secretPath = `/${encodeURIComponent(currentSecret)}`;
+    if (window.location.pathname !== secretPath) {
+      window.history.replaceState({}, "", secretPath);
+    }
     elements.otpCode.textContent = `${currentCode.slice(0, 3)} ${currentCode.slice(3)}`;
     elements.inputState.hidden = true;
     elements.resultState.hidden = false;
@@ -348,6 +350,9 @@ function resetGenerator() {
   elements.secretInput.type = "password";
   elements.revealButton.classList.remove("visible");
   updateRevealLabel();
+  if (window.location.pathname !== "/") {
+    window.history.replaceState({}, "", "/");
+  }
   window.setTimeout(() => elements.secretInput.focus(), 50);
 }
 
