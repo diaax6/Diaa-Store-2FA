@@ -137,13 +137,50 @@
                 <div class="progress-track"><span id="progress-fill"></span></div>
                 <p class="expires-text"><span data-i18n="refreshIn">رمز جديد تلقائيًا خلال</span> <strong id="expires-seconds">30</strong> <span data-i18n="seconds">ثانية</span></p>
 
-                <button class="primary-button copy-button" id="copy-button" type="button">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="3"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
-                  <span id="copy-button-text" data-i18n="copyCode">نسخ الرمز</span>
-                </button>
+                <div class="result-actions">
+                  <button class="primary-button copy-button" id="copy-button" type="button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="3"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+                    <span id="copy-button-text" data-i18n="copyCode">نسخ الرمز</span>
+                  </button>
+                  <button class="secondary-button" id="save-key-button" type="button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21 12 16l-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg>
+                    <span data-i18n="saveKey">حفظ المفتاح باسم</span>
+                  </button>
+                </div>
               </div>
             </form>
+
+            <section class="saved-accounts" id="saved-accounts" aria-labelledby="saved-title">
+              <div class="saved-heading">
+                <div>
+                  <span class="saved-kicker" data-i18n="savedKicker">وصول سريع</span>
+                  <h3 id="saved-title" data-i18n="savedTitle">المفاتيح المحفوظة</h3>
+                </div>
+                <span class="device-only"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg><span data-i18n="deviceOnly">على هذا الجهاز</span></span>
+              </div>
+              <div class="saved-empty" id="saved-empty">
+                <span class="empty-bookmark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M19 21 12 16l-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg></span>
+                <p data-i18n="savedEmpty">بعد إنشاء الرمز، احفظ المفتاح باسم للوصول إليه بضغطة واحدة.</p>
+              </div>
+              <div class="saved-list" id="saved-list"></div>
+            </section>
           </section>
+
+          <dialog class="save-dialog" id="save-dialog" aria-labelledby="save-dialog-title">
+            <form method="dialog" id="save-form">
+              <button class="dialog-close" id="dialog-close" value="cancel" aria-label="إغلاق" type="submit">×</button>
+              <span class="dialog-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M19 21 12 16l-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg></span>
+              <h3 id="save-dialog-title" data-i18n="saveDialogTitle">حفظ المفتاح</h3>
+              <p data-i18n="saveDialogDescription">اكتب اسمًا واضحًا للحساب لتجده بسرعة لاحقًا.</p>
+              <label for="key-name-input" data-i18n="keyNameLabel">اسم الحساب</label>
+              <input id="key-name-input" type="text" maxlength="40" autocomplete="off" placeholder="مثال: Facebook الرئيسي">
+              <p class="dialog-error" id="dialog-error" role="alert"></p>
+              <div class="dialog-actions">
+                <button class="dialog-cancel" value="cancel" type="submit" data-i18n="cancel">إلغاء</button>
+                <button class="dialog-save" id="dialog-save" value="default" type="submit" data-i18n="confirmSave">حفظ</button>
+              </div>
+            </form>
+          </dialog>
         </div>
       </section>
 

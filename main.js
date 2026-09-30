@@ -25,6 +25,22 @@ const translations = {
     seconds: "ثانية",
     copyCode: "نسخ الرمز",
     copied: "تم النسخ",
+    saveKey: "حفظ المفتاح باسم",
+    savedKicker: "وصول سريع",
+    savedTitle: "المفاتيح المحفوظة",
+    deviceOnly: "على هذا الجهاز",
+    savedEmpty: "بعد إنشاء الرمز، احفظ المفتاح باسم للوصول إليه بضغطة واحدة.",
+    saveDialogTitle: "حفظ المفتاح",
+    saveDialogDescription: "اكتب اسمًا واضحًا للحساب لتجده بسرعة لاحقًا.",
+    keyNameLabel: "اسم الحساب",
+    keyNamePlaceholder: "مثال: Facebook الرئيسي",
+    cancel: "إلغاء",
+    confirmSave: "حفظ",
+    nameRequired: "اكتب اسمًا للمفتاح أولًا.",
+    keySaved: "تم حفظ المفتاح على هذا الجهاز.",
+    keyDeleted: "تم حذف المفتاح المحفوظ.",
+    useSavedKey: "استخدام المفتاح",
+    deleteSavedKey: "حذف المفتاح",
     storesKicker: "الدعم الرسمي",
     storesTitle: "نحن هنا لمساعدتك",
     storesDescription: "تواصل مباشرة مع فريق المتجر المناسب عبر الصفحات والأرقام الرسمية.",
@@ -68,6 +84,22 @@ const translations = {
     seconds: "seconds",
     copyCode: "Copy code",
     copied: "Copied",
+    saveKey: "Save key with a name",
+    savedKicker: "QUICK ACCESS",
+    savedTitle: "Saved keys",
+    deviceOnly: "On this device",
+    savedEmpty: "After generating a code, save the key with a name for one-tap access.",
+    saveDialogTitle: "Save key",
+    saveDialogDescription: "Give this account a clear name so you can find it quickly later.",
+    keyNameLabel: "Account name",
+    keyNamePlaceholder: "Example: Main Facebook",
+    cancel: "Cancel",
+    confirmSave: "Save",
+    nameRequired: "Enter a name for this key first.",
+    keySaved: "Key saved on this device.",
+    keyDeleted: "Saved key deleted.",
+    useSavedKey: "Use key",
+    deleteSavedKey: "Delete key",
     storesKicker: "OFFICIAL SUPPORT",
     storesTitle: "We are here to help",
     storesDescription: "Contact the right store team directly through the official pages and numbers.",
@@ -108,6 +140,14 @@ const elements = {
   progressFill: document.getElementById("progress-fill"),
   copyButton: document.getElementById("copy-button"),
   copyButtonText: document.getElementById("copy-button-text"),
+  saveKeyButton: document.getElementById("save-key-button"),
+  savedAccounts: document.getElementById("saved-accounts"),
+  savedEmpty: document.getElementById("saved-empty"),
+  savedList: document.getElementById("saved-list"),
+  saveDialog: document.getElementById("save-dialog"),
+  saveForm: document.getElementById("save-form"),
+  keyNameInput: document.getElementById("key-name-input"),
+  dialogError: document.getElementById("dialog-error"),
   languageToggle: document.getElementById("language-toggle"),
   toast: document.getElementById("toast"),
   currentYear: document.getElementById("current-year")
@@ -119,6 +159,7 @@ let currentCode = "";
 let timerId = null;
 let lastCounter = null;
 let toastTimer = null;
+const STORAGE_KEY = "secure_hub_saved_keys_v1";
 
 function translate(key) {
   return translations[currentLanguage][key] || key;
@@ -140,6 +181,8 @@ function applyLanguage(language) {
   });
 
   updateRevealLabel();
+  elements.keyNameInput.placeholder = translate("keyNamePlaceholder");
+  renderSavedKeys();
   if (elements.copyButton.classList.contains("copied")) {
     elements.copyButtonText.textContent = translate("copied");
   }
@@ -169,6 +212,96 @@ function normalizeSecret(value) {
   }
 
   return candidate.replace(/[\s-]+/g, "").replace(/=+$/g, "").toUpperCase();
+}
+
+function getSavedKeys() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    if (!Array.isArray(stored)) return [];
+    return stored.filter((item) => (
+      item && typeof item.name === "string" && typeof item.secret === "string"
+    ));
+  } catch {
+    return [];
+  }
+}
+
+function writeSavedKeys(keys) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(keys));
+}
+
+function saveCurrentKey(name) {
+  if (!currentSecret) return;
+
+  const keys = getSavedKeys();
+  const existing = keys.find((item) => item.secret === currentSecret);
+  if (existing) {
+    existing.name = name;
+  } else {
+    keys.unshift({
+      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+      name,
+      secret: currentSecret
+    });
+  }
+
+  writeSavedKeys(keys);
+  renderSavedKeys();
+}
+
+function removeSavedKey(id) {
+  writeSavedKeys(getSavedKeys().filter((item) => item.id !== id));
+  renderSavedKeys();
+  showToast(translate("keyDeleted"));
+}
+
+function maskSecret(secret) {
+  if (secret.length <= 8) return "••••••••";
+  return `${secret.slice(0, 4)}••••${secret.slice(-4)}`;
+}
+
+function renderSavedKeys() {
+  const keys = getSavedKeys();
+  elements.savedList.replaceChildren();
+  elements.savedEmpty.hidden = keys.length > 0;
+
+  keys.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "saved-item";
+
+    const useButton = document.createElement("button");
+    useButton.type = "button";
+    useButton.className = "saved-item-main";
+    useButton.title = translate("useSavedKey");
+
+    const avatar = document.createElement("span");
+    avatar.className = "saved-avatar";
+    avatar.textContent = item.name.trim().slice(0, 2).toUpperCase() || "2F";
+
+    const details = document.createElement("span");
+    details.className = "saved-details";
+    const name = document.createElement("strong");
+    name.textContent = item.name;
+    const secret = document.createElement("small");
+    secret.textContent = maskSecret(item.secret);
+    details.append(name, secret);
+    useButton.append(avatar, details);
+    useButton.addEventListener("click", () => {
+      startGenerator(item.secret);
+      document.getElementById("generator").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "saved-delete";
+    deleteButton.title = translate("deleteSavedKey");
+    deleteButton.setAttribute("aria-label", `${translate("deleteSavedKey")}: ${item.name}`);
+    deleteButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m-9 0 1 15h8l1-15M10 10v7m4-7v7"/></svg>';
+    deleteButton.addEventListener("click", () => removeSavedKey(item.id));
+
+    row.append(useButton, deleteButton);
+    elements.savedList.appendChild(row);
+  });
 }
 
 function getSecretFromPath() {
@@ -423,6 +556,32 @@ elements.secretInput.addEventListener("input", clearError);
 elements.pasteButton.addEventListener("click", readClipboard);
 elements.copyButton.addEventListener("click", copyCode);
 elements.newKeyButton.addEventListener("click", resetGenerator);
+elements.saveKeyButton.addEventListener("click", () => {
+  if (!currentSecret) return;
+  const existing = getSavedKeys().find((item) => item.secret === currentSecret);
+  elements.keyNameInput.value = existing?.name || "";
+  elements.dialogError.textContent = "";
+  elements.saveDialog.showModal();
+  window.setTimeout(() => elements.keyNameInput.focus(), 50);
+});
+
+elements.saveForm.addEventListener("submit", (event) => {
+  if (event.submitter?.value === "cancel") return;
+  event.preventDefault();
+  const name = elements.keyNameInput.value.trim();
+  if (!name) {
+    elements.dialogError.textContent = translate("nameRequired");
+    elements.keyNameInput.focus();
+    return;
+  }
+  saveCurrentKey(name);
+  elements.saveDialog.close();
+  showToast(translate("keySaved"));
+});
+
+elements.saveDialog.addEventListener("click", (event) => {
+  if (event.target === elements.saveDialog) elements.saveDialog.close();
+});
 
 elements.revealButton.addEventListener("click", () => {
   const shouldShow = elements.secretInput.type === "password";
