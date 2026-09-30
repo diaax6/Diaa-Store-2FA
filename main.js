@@ -1,592 +1,436 @@
-/* =============================================
-   DIAA STORE 2FA — TOTP Generator
-   Pure JavaScript TOTP Implementation
-   ============================================= */
+"use strict";
 
-// ============================================
-// TOTP CORE — RFC 6238 Implementation
-// ============================================
-
-/**
- * Decode Base32 string to Uint8Array
- */
-function base32Decode(encoded) {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-  // Clean input: remove spaces, dashes, convert to uppercase
-  const cleaned = encoded.replace(/[\s-]+/g, '').toUpperCase().replace(/=+$/, '');
-  
-  if (cleaned.length === 0) return null;
-  
-  // Validate characters
-  for (let i = 0; i < cleaned.length; i++) {
-    if (alphabet.indexOf(cleaned[i]) === -1) return null;
+const translations = {
+  ar: {
+    skip: "انتقل إلى مولّد الأكواد",
+    navGenerator: "مولّد الكود",
+    navStores: "تواصل معنا",
+    eyebrow: "حماية ذكية. نتيجة فورية.",
+    heroLineOne: "رمز التحقق الخاص بك،",
+    heroLineTwo: "في ثوانٍ.",
+    heroDescription: "ولّد رموز التحقق بخطوتين مباشرة على جهازك. بدون تسجيل، وبدون إرسال مفتاحك لأي خادم.",
+    trustLocal: "يعمل محليًا",
+    trustPrivate: "لا يتم حفظ المفتاح",
+    trustFast: "تحديث تلقائي",
+    secureStatus: "اتصال آمن",
+    generatorTitle: "مولّد رمز 2FA",
+    secretLabel: "المفتاح السري",
+    paste: "لصق",
+    localNote: "تتم المعالجة داخل متصفحك فقط — مفتاحك لا يغادر جهازك.",
+    generate: "إنشاء رمز التحقق",
+    codeActive: "الرمز نشط الآن",
+    newKey: "مفتاح جديد",
+    currentCode: "رمزك الحالي",
+    refreshIn: "رمز جديد تلقائيًا خلال",
+    seconds: "ثانية",
+    copyCode: "نسخ الرمز",
+    copied: "تم النسخ",
+    storesKicker: "الدعم الرسمي",
+    storesTitle: "نحن هنا لمساعدتك",
+    storesDescription: "تواصل مباشرة مع فريق المتجر المناسب عبر الصفحات والأرقام الرسمية.",
+    officialStore: "متجر رسمي",
+    diaaDescription: "حلول رقمية ودعم مباشر باهتمام وسرعة.",
+    getproDescription: "تجربة احترافية وخدمات رقمية موثوقة.",
+    privacyTitle: "خصوصيتك جزء من التصميم",
+    privacyDescription: "لا نخزن مفتاحك، لا نضعه في رابط الصفحة، ولا نرسله إلى أي خادم. أغلق الصفحة فيُحذف من الجلسة.",
+    footerBy: "بواسطة Diaa Store × GetPro Store",
+    rights: "جميع الحقوق محفوظة.",
+    emptyError: "أدخل المفتاح السري أولًا.",
+    invalidError: "المفتاح غير صالح. استخدم مفتاح Base32 أو رابط otpauth صحيحًا.",
+    clipboardError: "تعذر الوصول إلى الحافظة. الصق المفتاح يدويًا.",
+    pasteSuccess: "تم لصق المفتاح.",
+    copySuccess: "تم نسخ الرمز.",
+    copyError: "تعذر نسخ الرمز.",
+    showSecret: "إظهار المفتاح",
+    hideSecret: "إخفاء المفتاح"
+  },
+  en: {
+    skip: "Skip to code generator",
+    navGenerator: "Code generator",
+    navStores: "Contact us",
+    eyebrow: "SMART SECURITY. INSTANT RESULT.",
+    heroLineOne: "Your verification code,",
+    heroLineTwo: "in seconds.",
+    heroDescription: "Generate two-factor authentication codes directly on your device. No account and no secret sent to any server.",
+    trustLocal: "Runs locally",
+    trustPrivate: "Secret is never saved",
+    trustFast: "Auto refresh",
+    secureStatus: "Secure session",
+    generatorTitle: "2FA Code Generator",
+    secretLabel: "Secret key",
+    paste: "Paste",
+    localNote: "Processing happens only in your browser — your secret never leaves your device.",
+    generate: "Generate verification code",
+    codeActive: "Code is active",
+    newKey: "New key",
+    currentCode: "Your current code",
+    refreshIn: "New code automatically in",
+    seconds: "seconds",
+    copyCode: "Copy code",
+    copied: "Copied",
+    storesKicker: "OFFICIAL SUPPORT",
+    storesTitle: "We are here to help",
+    storesDescription: "Contact the right store team directly through the official pages and numbers.",
+    officialStore: "Official store",
+    diaaDescription: "Digital solutions and fast, attentive support.",
+    getproDescription: "A professional experience and reliable digital services.",
+    privacyTitle: "Privacy is built in",
+    privacyDescription: "We do not save your secret, put it in the URL, or send it to a server. Close the page and it is gone.",
+    footerBy: "By Diaa Store × GetPro Store",
+    rights: "All rights reserved.",
+    emptyError: "Enter your secret key first.",
+    invalidError: "Invalid secret. Use a Base32 key or a valid otpauth URL.",
+    clipboardError: "Clipboard access failed. Paste the secret manually.",
+    pasteSuccess: "Secret pasted.",
+    copySuccess: "Code copied.",
+    copyError: "Could not copy the code.",
+    showSecret: "Show secret",
+    hideSecret: "Hide secret"
   }
-  
-  let bits = '';
-  for (let i = 0; i < cleaned.length; i++) {
-    const val = alphabet.indexOf(cleaned[i]);
-    bits += val.toString(2).padStart(5, '0');
-  }
-  
-  const bytes = new Uint8Array(Math.floor(bits.length / 8));
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(bits.substr(i * 8, 8), 2);
-  }
-  
-  return bytes;
-}
-
-/**
- * HMAC-SHA1 implementation using Web Crypto API
- */
-async function hmacSha1(key, message) {
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    key,
-    { name: 'HMAC', hash: 'SHA-1' },
-    false,
-    ['sign']
-  );
-  const signature = await crypto.subtle.sign('HMAC', cryptoKey, message);
-  return new Uint8Array(signature);
-}
-
-/**
- * Generate TOTP code
- * @param {string} secret - Base32 encoded secret
- * @param {number} period - Time period in seconds (default: 30)
- * @param {number} digits - Number of digits (default: 6)
- * @returns {Promise<string>} - TOTP code
- */
-async function generateTOTP(secret, period = 30, digits = 6) {
-  const key = base32Decode(secret);
-  if (!key || key.length === 0) {
-    throw new Error('Invalid secret key');
-  }
-  
-  // Get time counter
-  const time = Math.floor(Date.now() / 1000);
-  const counter = Math.floor(time / period);
-  
-  // Convert counter to 8-byte big-endian
-  const counterBytes = new Uint8Array(8);
-  let temp = counter;
-  for (let i = 7; i >= 0; i--) {
-    counterBytes[i] = temp & 0xff;
-    temp = Math.floor(temp / 256);
-  }
-  
-  // Calculate HMAC-SHA1
-  const hmac = await hmacSha1(key, counterBytes);
-  
-  // Dynamic truncation
-  const offset = hmac[hmac.length - 1] & 0x0f;
-  const code = (
-    ((hmac[offset] & 0x7f) << 24) |
-    ((hmac[offset + 1] & 0xff) << 16) |
-    ((hmac[offset + 2] & 0xff) << 8) |
-    (hmac[offset + 3] & 0xff)
-  ) % Math.pow(10, digits);
-
-  return code.toString().padStart(digits, '0');
-}
-
-/**
- * Get remaining seconds in current TOTP period
- */
-function getRemainingSeconds(period = 30) {
-  return period - (Math.floor(Date.now() / 1000) % period);
-}
-
-
-// ============================================
-// LOCAL STORAGE — Saved Keys
-// ============================================
-
-const STORAGE_KEY = 'diaa_store_2fa_keys';
-
-function getSavedKeys() {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch (e) {
-    return [];
-  }
-}
-
-function saveKey(name, secret) {
-  const keys = getSavedKeys();
-  // Prevent duplicates
-  const existing = keys.findIndex(k => k.secret === secret);
-  if (existing !== -1) {
-    keys[existing].name = name;
-  } else {
-    keys.push({ id: Date.now(), name, secret });
-  }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(keys));
-}
-
-function deleteKey(id) {
-  const keys = getSavedKeys().filter(k => k.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(keys));
-}
-
-
-// ============================================
-// UI CONTROLLER
-// ============================================
-
-let currentSecret = '';
-let timerInterval = null;
-let currentCode = '';
-
-// DOM elements
-const $ = id => document.getElementById(id);
-
-const elements = {
-  secretInput: $('secret-input'),
-  pasteBtn: $('paste-secret-btn'),
-  generateBtn: $('generate-btn'),
-  secretError: $('secret-error'),
-  inputSection: $('input-section'),
-  codeDisplay: $('code-display'),
-  activeKeyText: $('active-key-text'),
-  changeKeyBtn: $('change-key-btn'),
-  copyCodeBtn: $('copy-code-btn'),
-  timerBarFill: $('timer-bar-fill'),
-  timerCountdown: $('timer-countdown'),
-  timerProgress: $('timer-progress'),
-  timerSeconds: $('timer-seconds'),
-  savedKeysList: $('saved-keys-list'),
-  savedKeysEmpty: $('saved-keys-empty'),
-  heroParticles: $('hero-particles'),
 };
 
-// ---- Initialize ----
-document.addEventListener('DOMContentLoaded', () => {
-  initParticles();
-  initEventListeners();
-  renderSavedKeys();
-  
-  // Check for secret in URL path (e.g. /a3fztrscx734b6qy4cuxfjrownt35zly)
-  // decodeURIComponent handles %20 (spaces) and other encoded chars
-  const rawPathCode = decodeURIComponent(window.location.pathname).replace(/^\//, '').replace(/\/$/, '');
-  // Strip ALL whitespace, spaces, and non-alphanumeric characters — keep only letters and digits
-  const pathCode = rawPathCode.replace(/[^a-zA-Z0-9]/g, '');
-  if (pathCode && pathCode.length >= 16) {
-    elements.secretInput.value = pathCode;
-    startGenerator(pathCode);
-    return;
-  }
-  
-  // Fallback: check for secret in URL query params
-  const urlParams = new URLSearchParams(window.location.search);
-  const secretParam = urlParams.get('secret') || urlParams.get('key');
-  if (secretParam) {
-    elements.secretInput.value = secretParam;
-    startGenerator(secretParam);
-  }
-});
+const elements = {
+  html: document.documentElement,
+  form: document.getElementById("generator-form"),
+  inputState: document.getElementById("input-state"),
+  resultState: document.getElementById("result-state"),
+  secretInput: document.getElementById("secret-input"),
+  secretField: document.getElementById("secret-field"),
+  error: document.getElementById("secret-error"),
+  pasteButton: document.getElementById("paste-button"),
+  revealButton: document.getElementById("reveal-button"),
+  generateButton: document.getElementById("generate-button"),
+  newKeyButton: document.getElementById("new-key-button"),
+  otpCode: document.getElementById("otp-code"),
+  countdownRing: document.getElementById("countdown-ring"),
+  countdownNumber: document.getElementById("countdown-number"),
+  expiresSeconds: document.getElementById("expires-seconds"),
+  progressFill: document.getElementById("progress-fill"),
+  copyButton: document.getElementById("copy-button"),
+  copyButtonText: document.getElementById("copy-button-text"),
+  languageToggle: document.getElementById("language-toggle"),
+  toast: document.getElementById("toast"),
+  currentYear: document.getElementById("current-year")
+};
 
-function initEventListeners() {
-  // Paste button
-  elements.pasteBtn.addEventListener('click', async () => {
+let currentLanguage = "ar";
+let currentSecret = "";
+let currentCode = "";
+let timerId = null;
+let lastCounter = null;
+let toastTimer = null;
+
+function translate(key) {
+  return translations[currentLanguage][key] || key;
+}
+
+function applyLanguage(language) {
+  currentLanguage = language === "en" ? "en" : "ar";
+  const isArabic = currentLanguage === "ar";
+
+  elements.html.lang = currentLanguage;
+  elements.html.dir = isArabic ? "rtl" : "ltr";
+  elements.languageToggle.textContent = isArabic ? "EN" : "عربي";
+
+  document.querySelectorAll("[data-i18n]").forEach((node) => {
+    const key = node.dataset.i18n;
+    if (translations[currentLanguage][key]) {
+      node.textContent = translations[currentLanguage][key];
+    }
+  });
+
+  updateRevealLabel();
+  if (elements.copyButton.classList.contains("copied")) {
+    elements.copyButtonText.textContent = translate("copied");
+  }
+}
+
+function updateRevealLabel() {
+  const isVisible = elements.secretInput.type === "text";
+  const label = translate(isVisible ? "hideSecret" : "showSecret");
+  elements.revealButton.setAttribute("aria-label", label);
+  elements.revealButton.title = label;
+}
+
+function normalizeSecret(value) {
+  const trimmed = String(value || "").trim();
+  let candidate = trimmed;
+
+  if (/^otpauth:\/\//i.test(trimmed)) {
     try {
-      const text = await navigator.clipboard.readText();
-      elements.secretInput.value = text.trim();
-      elements.secretInput.focus();
-    } catch (e) {
-      showToast('Unable to access clipboard', 'error');
-    }
-  });
-  
-  // Generate button
-  elements.generateBtn.addEventListener('click', () => {
-    // Strip ALL whitespace and spaces from input
-    const secret = elements.secretInput.value.replace(/\s+/g, '').trim();
-    if (!secret) {
-      showError(elements.secretError, 'Please enter a secret key');
-      elements.secretInput.classList.add('error');
-      return;
-    }
-    startGenerator(secret);
-  });
-  
-  // Enter key on input
-  elements.secretInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      elements.generateBtn.click();
-    }
-  });
-  
-  // Clear error on input
-  elements.secretInput.addEventListener('input', () => {
-    hideError(elements.secretError);
-    elements.secretInput.classList.remove('error');
-  });
-  
-  // Change key button
-  elements.changeKeyBtn.addEventListener('click', () => {
-    stopGenerator();
-    elements.codeDisplay.classList.remove('active');
-    elements.inputSection.classList.remove('hidden');
-    elements.inputSection.style.display = '';
-    elements.secretInput.value = '';
-    elements.secretInput.focus();
-    // Reset URL back to root
-    window.history.pushState({}, '', '/');
-  });
-  
-  // Copy code button
-  elements.copyCodeBtn.addEventListener('click', () => {
-    if (!currentCode) return;
-    navigator.clipboard.writeText(currentCode).then(() => {
-      elements.copyCodeBtn.classList.add('copied');
-      elements.copyCodeBtn.querySelector('.copy-text').textContent = 'Copied!';
-      showToast('Code copied to clipboard!', 'success');
-      setTimeout(() => {
-        elements.copyCodeBtn.classList.remove('copied');
-        elements.copyCodeBtn.querySelector('.copy-text').textContent = 'Copy';
-      }, 2000);
-    }).catch(() => {
-      showToast('Failed to copy', 'error');
-    });
-  });
-}
-
-// ---- Generator Logic ----
-async function startGenerator(secret) {
-  // Strip ALL whitespace, spaces, dashes — keep only alphanumeric chars
-  const cleanedSecret = secret.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-  
-  try {
-    const testCode = await generateTOTP(cleanedSecret);
-    if (!testCode) throw new Error('Invalid');
-  } catch (e) {
-    showError(elements.secretError, 'Invalid Base32 secret key. Please check and try again.');
-    elements.secretInput.classList.add('error');
-    return;
-  }
-  
-  currentSecret = cleanedSecret;
-  
-  // Auto-update URL to show the secret key after /
-  const newUrl = '/' + cleanedSecret.toLowerCase();
-  if (window.location.pathname !== newUrl) {
-    window.history.pushState({}, '', newUrl);
-  }
-  
-  // Switch to code display
-  elements.inputSection.style.display = 'none';
-  elements.codeDisplay.classList.add('active');
-  
-  // Mask the key for display
-  const masked = currentSecret.length > 8 
-    ? currentSecret.substring(0, 4) + '••••' + currentSecret.substring(currentSecret.length - 4)
-    : '••••••••';
-  elements.activeKeyText.textContent = `Key: ${masked}`;
-  
-  // Add save key button if not already present
-  addSaveKeyButton();
-  
-  // Start generating
-  updateCode();
-  startTimer();
-}
-
-function stopGenerator() {
-  if (timerInterval) {
-    clearInterval(timerInterval);
-    timerInterval = null;
-  }
-  currentSecret = '';
-  currentCode = '';
-}
-
-async function updateCode() {
-  if (!currentSecret) return;
-  
-  try {
-    const code = await generateTOTP(currentSecret);
-    currentCode = code;
-    
-    // Update digits with animation
-    for (let i = 0; i < 6; i++) {
-      const digitEl = $(`digit-${i}`);
-      if (digitEl.textContent !== code[i]) {
-        digitEl.textContent = code[i];
-        digitEl.classList.remove('animate');
-        // Force reflow
-        void digitEl.offsetWidth;
-        digitEl.classList.add('animate');
+      const otpUrl = new URL(trimmed);
+      if (otpUrl.protocol !== "otpauth:" || otpUrl.hostname.toLowerCase() !== "totp") {
+        return "";
       }
+      candidate = otpUrl.searchParams.get("secret") || "";
+    } catch {
+      return "";
     }
-  } catch (e) {
-    console.error('TOTP generation failed:', e);
   }
+
+  return candidate.replace(/[\s-]+/g, "").replace(/=+$/g, "").toUpperCase();
+}
+
+function decodeBase32(secret) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const normalized = normalizeSecret(secret);
+
+  if (normalized.length < 8 || !/^[A-Z2-7]+$/.test(normalized)) {
+    throw new Error("Invalid Base32 secret");
+  }
+
+  let accumulator = 0;
+  let bitCount = 0;
+  const bytes = [];
+
+  for (const character of normalized) {
+    accumulator = (accumulator << 5) | alphabet.indexOf(character);
+    bitCount += 5;
+
+    while (bitCount >= 8) {
+      bitCount -= 8;
+      bytes.push((accumulator >>> bitCount) & 0xff);
+    }
+  }
+
+  if (!bytes.length) {
+    throw new Error("Invalid Base32 payload");
+  }
+
+  return new Uint8Array(bytes);
+}
+
+async function generateTotp(secret, timestamp = Date.now(), period = 30, digits = 6) {
+  const keyBytes = decodeBase32(secret);
+  const counter = Math.floor(timestamp / 1000 / period);
+  const counterBytes = new ArrayBuffer(8);
+  const counterView = new DataView(counterBytes);
+  const high = Math.floor(counter / 0x100000000);
+  const low = counter >>> 0;
+
+  counterView.setUint32(0, high, false);
+  counterView.setUint32(4, low, false);
+
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    keyBytes,
+    { name: "HMAC", hash: "SHA-1" },
+    false,
+    ["sign"]
+  );
+  const signature = new Uint8Array(await crypto.subtle.sign("HMAC", cryptoKey, counterBytes));
+  const offset = signature[signature.length - 1] & 0x0f;
+  const binary = (
+    ((signature[offset] & 0x7f) << 24) |
+    ((signature[offset + 1] & 0xff) << 16) |
+    ((signature[offset + 2] & 0xff) << 8) |
+    (signature[offset + 3] & 0xff)
+  );
+
+  return String(binary % (10 ** digits)).padStart(digits, "0");
+}
+
+async function refreshCode(forceAnimation = false) {
+  if (!currentSecret) return;
+
+  try {
+    const code = await generateTotp(currentSecret);
+    if (code !== currentCode || forceAnimation) {
+      currentCode = code;
+      elements.otpCode.textContent = `${code.slice(0, 3)} ${code.slice(3)}`;
+      elements.otpCode.classList.remove("bump");
+      void elements.otpCode.offsetWidth;
+      elements.otpCode.classList.add("bump");
+    }
+  } catch {
+    resetGenerator();
+    showError(translate("invalidError"));
+  }
+}
+
+function updateTimer() {
+  if (!currentSecret) return;
+
+  const now = Date.now();
+  const elapsed = (now / 1000) % 30;
+  const remainingPrecise = 30 - elapsed;
+  const remaining = Math.ceil(remainingPrecise);
+  const progress = Math.max(0, Math.min(1, remainingPrecise / 30));
+  const counter = Math.floor(now / 1000 / 30);
+  const isWarning = remaining <= 5;
+
+  elements.countdownNumber.textContent = String(remaining);
+  elements.expiresSeconds.textContent = String(remaining);
+  elements.countdownRing.style.setProperty("--progress", progress.toFixed(4));
+  elements.countdownRing.classList.toggle("warning", isWarning);
+  elements.progressFill.style.transform = `scaleX(${progress})`;
+  elements.progressFill.classList.toggle("warning", isWarning);
+
+  if (lastCounter !== null && counter !== lastCounter) {
+    refreshCode(true);
+  }
+  lastCounter = counter;
 }
 
 function startTimer() {
-  if (timerInterval) clearInterval(timerInterval);
-  
-  const circumference = 2 * Math.PI * 54; // r=54 from SVG
-  let lastRemaining = -1;
-  
-  function tick() {
-    const remaining = getRemainingSeconds();
-    const percentage = remaining / 30;
-    
-    // Update bar
-    elements.timerBarFill.style.width = `${percentage * 100}%`;
-    
-    // Update countdown text
-    elements.timerCountdown.textContent = `${remaining}s`;
-    
-    // Update circular timer
-    const offset = circumference * (1 - percentage);
-    elements.timerProgress.style.strokeDashoffset = offset;
-    elements.timerSeconds.textContent = remaining;
-    
-    // Warning state when less than 5 seconds
-    const isWarning = remaining <= 5;
-    elements.timerBarFill.classList.toggle('warning', isWarning);
-    elements.timerCountdown.classList.toggle('warning', isWarning);
-    elements.timerProgress.classList.toggle('warning', isWarning);
-    elements.timerSeconds.classList.toggle('warning', isWarning);
-    
-    // Regenerate code when timer resets (detect rollover)
-    if (remaining > lastRemaining && lastRemaining !== -1) {
-      updateCode();
-    }
-    lastRemaining = remaining;
+  stopTimer();
+  lastCounter = Math.floor(Date.now() / 1000 / 30);
+  updateTimer();
+  timerId = window.setInterval(updateTimer, 250);
+}
+
+function stopTimer() {
+  if (timerId !== null) {
+    window.clearInterval(timerId);
+    timerId = null;
   }
-  
-  tick();
-  timerInterval = setInterval(tick, 1000);
+  lastCounter = null;
 }
 
-// ---- Save Key ----
-function addSaveKeyButton() {
-  // Remove existing save section if any
-  const existing = document.querySelector('.save-key-section');
-  if (existing) existing.remove();
-  
-  const saveSection = document.createElement('div');
-  saveSection.className = 'save-key-section';
-  
-  const isAlreadySaved = getSavedKeys().some(k => k.secret === currentSecret);
-  
-  saveSection.innerHTML = `
-    <button class="btn-save-key ${isAlreadySaved ? 'saved' : ''}" id="save-key-btn">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-      ${isAlreadySaved ? 'Key Saved' : 'Save Key for Quick Access'}
-    </button>
-  `;
-  
-  elements.codeDisplay.appendChild(saveSection);
-  
-  saveSection.querySelector('#save-key-btn').addEventListener('click', () => {
-    if (isAlreadySaved) {
-      showToast('Key is already saved', 'success');
-      return;
-    }
-    showSaveModal();
-  });
-}
-
-function showSaveModal() {
-  // Create modal
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay active';
-  overlay.innerHTML = `
-    <div class="modal">
-      <h3 class="modal-title">Save Secret Key</h3>
-      <p class="modal-desc">Give this key a name for easy identification</p>
-      <input type="text" class="modal-input" id="modal-key-name" placeholder="e.g. Facebook, GitHub, Google..." autofocus />
-      <div class="modal-actions">
-        <button class="btn-modal-cancel" id="modal-cancel">Cancel</button>
-        <button class="btn-modal-save" id="modal-save">Save Key</button>
-      </div>
-    </div>
-  `;
-  
-  document.body.appendChild(overlay);
-  
-  // Focus input
-  setTimeout(() => overlay.querySelector('#modal-key-name').focus(), 100);
-  
-  // Events
-  overlay.querySelector('#modal-cancel').addEventListener('click', () => {
-    overlay.remove();
-  });
-  
-  overlay.querySelector('#modal-save').addEventListener('click', () => {
-    const name = overlay.querySelector('#modal-key-name').value.trim();
-    if (!name) {
-      overlay.querySelector('#modal-key-name').style.borderColor = 'var(--color-error)';
-      return;
-    }
-    saveKey(name, currentSecret);
-    overlay.remove();
-    renderSavedKeys();
-    addSaveKeyButton(); // Refresh button state
-    showToast('Key saved successfully!', 'success');
-  });
-  
-  overlay.querySelector('#modal-key-name').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') overlay.querySelector('#modal-save').click();
-    if (e.key === 'Escape') overlay.remove();
-  });
-  
-  // Click outside to close
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) overlay.remove();
-  });
-}
-
-// ---- Render Saved Keys ----
-function renderSavedKeys() {
-  const keys = getSavedKeys();
-  
-  if (keys.length === 0) {
-    elements.savedKeysEmpty.classList.remove('hidden');
-    elements.savedKeysEmpty.style.display = '';
-    elements.savedKeysList.innerHTML = '';
+async function startGenerator(rawSecret) {
+  const secret = normalizeSecret(rawSecret);
+  if (!secret) {
+    showError(rawSecret.trim() ? translate("invalidError") : translate("emptyError"));
     return;
   }
-  
-  elements.savedKeysEmpty.classList.add('hidden');
-  elements.savedKeysEmpty.style.display = 'none';
-  
-  elements.savedKeysList.innerHTML = keys.map(key => {
-    const masked = key.secret.length > 12
-      ? key.secret.substring(0, 6) + '••••' + key.secret.substring(key.secret.length - 4)
-      : key.secret.substring(0, 3) + '••••';
-    
-    const initials = key.name.substring(0, 2).toUpperCase();
-    
-    return `
-      <div class="saved-key-item" data-secret="${key.secret}" data-id="${key.id}">
-        <div class="saved-key-icon">${initials}</div>
-        <div class="saved-key-info">
-          <div class="saved-key-name">${escapeHtml(key.name)}</div>
-          <div class="saved-key-secret">${masked}</div>
-        </div>
-        <div class="saved-key-actions">
-          <button class="saved-key-btn use-key" title="Use this key" data-secret="${key.secret}">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-          </button>
-          <button class="saved-key-btn delete" title="Delete key" data-id="${key.id}">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-          </button>
-        </div>
-      </div>
-    `;
-  }).join('');
-  
-  // Attach events
-  elements.savedKeysList.querySelectorAll('.use-key').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const secret = btn.dataset.secret;
-      elements.secretInput.value = secret;
-      startGenerator(secret);
-      document.getElementById('generator-section').scrollIntoView({ behavior: 'smooth' });
-    });
-  });
-  
-  elements.savedKeysList.querySelectorAll('.saved-key-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const secret = item.dataset.secret;
-      elements.secretInput.value = secret;
-      startGenerator(secret);
-      document.getElementById('generator-section').scrollIntoView({ behavior: 'smooth' });
-    });
-  });
-  
-  elements.savedKeysList.querySelectorAll('.delete').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const id = parseInt(btn.dataset.id);
-      deleteKey(id);
-      renderSavedKeys();
-      showToast('Key deleted', 'success');
-    });
-  });
-}
 
-// ---- Particles ----
-function initParticles() {
-  const container = elements.heroParticles;
-  if (!container) return;
-  
-  for (let i = 0; i < 20; i++) {
-    const particle = document.createElement('div');
-    particle.className = 'particle';
-    particle.style.left = Math.random() * 100 + '%';
-    particle.style.top = Math.random() * 100 + '%';
-    particle.style.animationDelay = Math.random() * 8 + 's';
-    particle.style.animationDuration = (6 + Math.random() * 6) + 's';
-    particle.style.width = (2 + Math.random() * 3) + 'px';
-    particle.style.height = particle.style.width;
-    particle.style.opacity = Math.random() * 0.5;
-    container.appendChild(particle);
+  setLoading(true);
+  clearError();
+
+  try {
+    currentSecret = secret;
+    currentCode = await generateTotp(currentSecret);
+    elements.otpCode.textContent = `${currentCode.slice(0, 3)} ${currentCode.slice(3)}`;
+    elements.inputState.hidden = true;
+    elements.resultState.hidden = false;
+    elements.secretInput.value = "";
+    elements.secretInput.type = "password";
+    elements.revealButton.classList.remove("visible");
+    updateRevealLabel();
+    startTimer();
+  } catch {
+    currentSecret = "";
+    currentCode = "";
+    showError(translate("invalidError"));
+  } finally {
+    setLoading(false);
   }
 }
 
-// ---- Toast Notification ----
-function showToast(message, type = 'success') {
-  // Remove existing toast
-  const existing = document.querySelector('.toast');
-  if (existing) existing.remove();
-  
-  const toast = document.createElement('div');
-  toast.className = `toast ${type}`;
-  
-  const icon = type === 'success' 
-    ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'
-    : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
-  
-  toast.innerHTML = `${icon} ${message}`;
-  document.body.appendChild(toast);
-  
-  // Trigger animation
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      toast.classList.add('visible');
-    });
-  });
-  
-  setTimeout(() => {
-    toast.classList.remove('visible');
-    setTimeout(() => toast.remove(), 400);
-  }, 3000);
+function resetGenerator() {
+  stopTimer();
+  currentSecret = "";
+  currentCode = "";
+  elements.otpCode.textContent = "--- ---";
+  elements.resultState.hidden = true;
+  elements.inputState.hidden = false;
+  elements.copyButton.classList.remove("copied");
+  elements.copyButtonText.textContent = translate("copyCode");
+  elements.secretInput.value = "";
+  elements.secretInput.type = "password";
+  elements.revealButton.classList.remove("visible");
+  updateRevealLabel();
+  window.setTimeout(() => elements.secretInput.focus(), 50);
 }
 
-// ---- Error helpers ----
-function showError(el, message) {
-  el.textContent = message;
-  el.classList.add('visible');
+function setLoading(isLoading) {
+  elements.generateButton.disabled = isLoading;
 }
 
-function hideError(el) {
-  el.classList.remove('visible');
+function showError(message) {
+  elements.error.textContent = message;
+  elements.error.classList.add("visible");
+  elements.secretField.classList.add("error");
+  elements.secretInput.setAttribute("aria-invalid", "true");
 }
 
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+function clearError() {
+  elements.error.textContent = "";
+  elements.error.classList.remove("visible");
+  elements.secretField.classList.remove("error");
+  elements.secretInput.removeAttribute("aria-invalid");
 }
 
-// ---- Navbar scroll effect ----
-window.addEventListener('scroll', () => {
-  const navbar = document.getElementById('navbar');
-  if (window.scrollY > 50) {
-    navbar.style.background = 'rgba(9, 9, 11, 0.85)';
-    navbar.style.borderBottomColor = 'rgba(139, 92, 246, 0.15)';
-  } else {
-    navbar.style.background = 'rgba(9, 9, 11, 0.6)';
-    navbar.style.borderBottomColor = '';
+function showToast(message, type = "success") {
+  window.clearTimeout(toastTimer);
+  elements.toast.textContent = message;
+  elements.toast.className = `toast ${type} visible`;
+  toastTimer = window.setTimeout(() => {
+    elements.toast.classList.remove("visible");
+  }, 2600);
+}
+
+async function readClipboard() {
+  try {
+    const value = await navigator.clipboard.readText();
+    if (!value.trim()) throw new Error("Empty clipboard");
+    elements.secretInput.value = value.trim();
+    clearError();
+    elements.secretInput.focus();
+    showToast(translate("pasteSuccess"));
+  } catch {
+    showToast(translate("clipboardError"), "error");
+    elements.secretInput.focus();
+  }
+}
+
+async function copyCode() {
+  if (!currentCode) return;
+
+  try {
+    await navigator.clipboard.writeText(currentCode);
+    elements.copyButton.classList.add("copied");
+    elements.copyButtonText.textContent = translate("copied");
+    showToast(translate("copySuccess"));
+    window.setTimeout(() => {
+      elements.copyButton.classList.remove("copied");
+      elements.copyButtonText.textContent = translate("copyCode");
+    }, 1800);
+  } catch {
+    showToast(translate("copyError"), "error");
+  }
+}
+
+elements.form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  startGenerator(elements.secretInput.value);
+});
+
+elements.secretInput.addEventListener("input", clearError);
+elements.pasteButton.addEventListener("click", readClipboard);
+elements.copyButton.addEventListener("click", copyCode);
+elements.newKeyButton.addEventListener("click", resetGenerator);
+
+elements.revealButton.addEventListener("click", () => {
+  const shouldShow = elements.secretInput.type === "password";
+  elements.secretInput.type = shouldShow ? "text" : "password";
+  elements.revealButton.classList.toggle("visible", shouldShow);
+  updateRevealLabel();
+  elements.secretInput.focus();
+});
+
+elements.languageToggle.addEventListener("click", () => {
+  applyLanguage(currentLanguage === "ar" ? "en" : "ar");
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && currentSecret) {
+    refreshCode();
+    updateTimer();
   }
 });
+
+window.addEventListener("pagehide", () => {
+  stopTimer();
+  currentSecret = "";
+  currentCode = "";
+});
+
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) {
+    resetGenerator();
+  }
+});
+
+elements.currentYear.textContent = String(new Date().getFullYear());
+applyLanguage("ar");
